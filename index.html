@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Friend Graph Finder</title>
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    #network {
+      flex: 1 1 400px;
+      min-width: 300px;
+      height: 500px;
+      border: 1px solid lightgray;
+      background-color: #fff;
+    }
+
+    .controls {
+      flex: 1 1 300px;
+      min-width: 280px;
+      padding: 15px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+
+    input, button, textarea {
+      padding: 6px;
+      margin: 5px 0;
+      width: 100%;
+      font-size: 14px;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .form-section {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #ccc;
+    }
+
+    #result, #addResult, #removeResult, #deleteResult {
+      margin-top: 10px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h2>Friend Graph Finder</h2>
+
+  <div class="container">
+    <!-- Graph Box -->
+    <div id="network"></div>
+
+    <!-- Control Panel -->
+    <div class="controls">
+      <!-- Find Path -->
+      <label>Start:
+        <input id="start" placeholder="e.g., You" />
+      </label>
+      <label>Target:
+        <input id="target" placeholder="e.g., Panhapich" />
+      </label>
+      <button onclick="findPath()">Find Path</button>
+      <p id="result"></p>
+
+      <!-- Add Person -->
+      <div class="form-section">
+        <h3>Add New Person</h3>
+        <label>Name:
+          <input type="text" id="newName" placeholder="Person's name" />
+        </label>
+        <label>Friends (comma separated):
+          <input type="text" id="newFriends" placeholder="Friend1, Friend2" />
+        </label>
+        <button onclick="addPerson()">Add Person</button>
+        <p id="addResult"></p>
+      </div>
+
+      <!-- Remove Friend -->
+      <div class="form-section">
+        <h3>Remove Friend</h3>
+        <label>Person A:
+          <input type="text" id="removeA" placeholder="e.g., You" />
+        </label>
+        <label>Person B:
+          <input type="text" id="removeB" placeholder="e.g., Panhapich" />
+        </label>
+        <button onclick="removeFriend()">Remove Friend</button>
+        <p id="removeResult"></p>
+      </div>
+
+      <!-- Delete Person -->
+      <div class="form-section">
+        <h3>Delete Person</h3>
+        <label>Name:
+          <input type="text" id="deleteName" placeholder="Person to delete" />
+        </label>
+        <button onclick="deletePerson()">Delete Person</button>
+        <p id="deleteResult"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let graph = {
+      You: ["Panharith", "Soklin", "Sakura"],
+      Panharith: ["You", "Panhapich", "Soklin", "Sokheng"],
+      Panhapich: ["Panharith"],
+      Soklin: ["Panharith", "Bunsum"],
+      Bunsum: ["Soklin", "Chornay"],
+      Chornay: ["Bunsum", "Sokheng"],
+      Sokheng: ["Panharith", "Chornay"],
+    };
+
+    let nodes = new vis.DataSet();
+    let edges = new vis.DataSet();
+    const container = document.getElementById("network");
+
+    function buildNetwork() {
+      nodes.clear();
+      edges.clear();
+
+      Object.keys(graph).forEach((name) => {
+        nodes.add({ id: name, label: name });
+      });
+
+      const edgeSet = new Set();
+      Object.entries(graph).forEach(([person, friends]) => {
+        friends.forEach((friend) => {
+          const key = [person, friend].sort().join("-");
+          if (!edgeSet.has(key)) {
+            edges.add({ from: person, to: friend });
+            edgeSet.add(key);
+          }
+        });
+      });
+
+      const data = { nodes, edges };
+      const options = {
+        nodes: {
+          shape: "dot",
+          size: 20,
+          font: { size: 16 },
+        },
+        edges: {
+          arrows: "",
+          color: "gray",
+          smooth: false,
+        },
+        physics: {
+          stabilization: true,
+        },
+      };
+
+      new vis.Network(container, data, options);
+    }
+
+    buildNetwork();
+
+    function bfsFriendPath(graph, start, target) {
+      const visited = new Set();
+      const queue = [[start]];
+
+      while (queue.length > 0) {
+        const path = queue.shift();
+        const person = path[path.length - 1];
+
+        if (person === target) return path;
+
+        if (!visited.has(person)) {
+          visited.add(person);
+          for (let friend of graph[person] || []) {
+            queue.push([...path, friend]);
+          }
+        }
+      }
+      return null;
+    }
+
+    function findPath() {
+      const start = document.getElementById("start").value.trim();
+      const target = document.getElementById("target").value.trim();
+      const result = document.getElementById("result");
+
+      if (!graph[start] || !graph[target]) {
+        result.textContent = "Start or target not found in the graph.";
+        return;
+      }
+
+      const path = bfsFriendPath(graph, start, target);
+
+      if (path) {
+        result.innerHTML = `=> Path found: <strong>${path.join(" → ")}</strong>`;
+      } else {
+        result.textContent = "✘ No connection found.";
+      }
+    }
+
+    function addPerson() {
+      const newName = document.getElementById("newName").value.trim();
+      const newFriends = document.getElementById("newFriends").value.split(",").map(f => f.trim()).filter(Boolean);
+      const addResult = document.getElementById("addResult");
+
+      if (!newName) {
+        addResult.textContent = "Please enter a name.";
+        return;
+      }
+
+      if (graph[newName]) {
+        addResult.textContent = "This person already exists.";
+        return;
+      }
+
+      graph[newName] = [];
+
+      newFriends.forEach(friend => {
+        if (!graph[friend]) {
+          graph[friend] = [];
+        }
+        if (!graph[newName].includes(friend)) graph[newName].push(friend);
+        if (!graph[friend].includes(newName)) graph[friend].push(newName);
+      });
+
+      addResult.textContent = `Added "${newName}" with friends: ${newFriends.join(", ") || "None"}`;
+      document.getElementById("newName").value = "";
+      document.getElementById("newFriends").value = "";
+      buildNetwork();
+    }
+
+    function removeFriend() {
+      const a = document.getElementById("removeA").value.trim();
+      const b = document.getElementById("removeB").value.trim();
+      const removeResult = document.getElementById("removeResult");
+
+      if (!graph[a] || !graph[b]) {
+        removeResult.textContent = "One or both people not found.";
+        return;
+      }
+
+      graph[a] = graph[a].filter(friend => friend !== b);
+      graph[b] = graph[b].filter(friend => friend !== a);
+
+      removeResult.textContent = `Removed connection between "${a}" and "${b}".`;
+      buildNetwork();
+    }
+
+    function deletePerson() {
+      const name = document.getElementById("deleteName").value.trim();
+      const deleteResult = document.getElementById("deleteResult");
+
+      if (!graph[name]) {
+        deleteResult.textContent = "Person not found.";
+        return;
+      }
+
+      Object.keys(graph).forEach(person => {
+        graph[person] = graph[person].filter(friend => friend !== name);
+      });
+
+      delete graph[name];
+
+      deleteResult.textContent = `Deleted "${name}" and all their connections.`;
+      document.getElementById("deleteName").value = "";
+      buildNetwork();
+    }
+  </script>
+</body>
+</html>
